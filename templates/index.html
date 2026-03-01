@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>あみだくじ・カスタム設定版</title>
+    <style>
+        :root {
+            --line-width: 4px;
+            --line-color: #333;
+            --active-color: #ff4757;
+            --spacing: 100px; /* 名前が長くてもいいように少し広げました */
+        }
+        body { font-family: sans-serif; background: #f8f9fa; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        
+        /* 設定エリア */
+        .setup-area { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; width: 400px; }
+        .input-row { display: flex; gap: 5px; margin-bottom: 5px; }
+        .input-row input { flex: 1; padding: 5px; border: 1px solid #ddd; border-radius: 3px; }
+
+        /* あみだ表示エリア */
+        #amida-wrapper { position: relative; margin: 60px auto; min-height: 450px; }
+        .v-line { width: var(--line-width); height: 400px; background: var(--line-color); position: absolute; top: 0; }
+        .h-line { position: absolute; height: var(--line-width); background: var(--line-color); width: var(--spacing); }
+        .player { position: absolute; width: 16px; height: 16px; background: var(--active-color); border-radius: 50%; z-index: 100; transform: translate(-6px, -8px); transition: all 0.15s linear; box-shadow: 0 0 10px rgba(255, 71, 87, 0.8); }
+
+        .label { position: absolute; width: 90px; left: -43px; text-align: center; font-weight: bold; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .name-tag { top: -35px; color: #2c3e50; }
+        .prize-tag { bottom: -35px; color: #e67e22; }
+
+        /* 結果表示 */
+        #result-container { margin-top: 30px; width: 350px; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+
+        button { padding: 10px 15px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; margin-top: 10px; }
+        .btn-build { background: #2c3e50; color: white; width: 100%; }
+        .btn-start { background: var(--active-color); color: white; width: 100%; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="setup-area" id="setup-area">
+    <h3>1. 参加者と景品を入力</h3>
+    <div id="member-inputs">
+        <div class="input-row">
+            <input type="text" class="name-in" value="田中">
+            <input type="text" class="prize-in" value="1等：Switch">
+        </div>
+        <div class="input-row">
+            <input type="text" class="name-in" value="佐藤">
+            <input type="text" class="prize-in" value="2等：図書カード">
+        </div>
+        <div class="input-row">
+            <input type="text" class="name-in" value="鈴木">
+            <input type="text" class="prize-in" value="3等：たわし">
+        </div>
+    </div>
+    <button onclick="addInputRow()" style="background:#eee; color:#333; width:100%; margin-bottom:10px;">+ 参加者を追加</button>
+    <button class="btn-build" onclick="initAmida()">2. あみだくじを生成</button>
+</div>
+
+<div id="play-area" style="text-align:center; display:none;">
+    <button id="next-btn" class="btn-start" onclick="startNextPlayer()">次の人をスタート！</button>
+    <div id="status-display" style="margin: 10px; color: #ff4757; font-weight: bold;"></div>
+
+    <div id="amida-wrapper">
+        <div id="amida-content"></div>
+    </div>
+</div>
+
+<div id="result-container" style="display:none;">
+    <h3>結果一覧</h3>
+    <table>
+        <thead><tr><th>名前</th><th>結果</th></tr></thead>
+        <tbody id="result-body"></tbody>
+    </table>
+</div>
+
+<script>
+    let amidaData = [];
+    let currentPlayerIndex = 0;
+    let isRunning = false;
+    let memberNames = [];
+    let memberPrizes = [];
+    const depth = 15;
+    const stepHeight = 25;
+    const spacing = 100;
+
+    function addInputRow() {
+        const container = document.getElementById('member-inputs');
+        const row = document.createElement('div');
+        row.className = 'input-row';
+        row.innerHTML = `<input type="text" class="name-in" placeholder="名前">
+                         <input type="text" class="prize-in" placeholder="景品">`;
+        container.appendChild(row);
+    }
+
+    function initAmida() {
+        const nameInputs = document.querySelectorAll('.name-in');
+        const prizeInputs = document.querySelectorAll('.prize-in');
+        memberNames = Array.from(nameInputs).map(i => i.value || "名無し");
+        memberPrizes = Array.from(prizeInputs).map(i => i.value || "空");
+        const n_lines = memberNames.length;
+
+        if (n_lines < 2) return alert("2人以上入力してください");
+
+        // UI切り替え
+        document.getElementById('play-area').style.display = 'block';
+        document.getElementById('result-container').style.display = 'block';
+        document.getElementById('next-btn').style.display = 'block';
+        document.getElementById('next-btn').disabled = false;
+        document.getElementById('result-body').innerHTML = '';
+        currentPlayerIndex = 0;
+        isRunning = false;
+        document.getElementById('status-display').innerText = `${memberNames[0]} さんの番です`;
+
+        const wrapper = document.getElementById('amida-wrapper');
+        const container = document.getElementById('amida-content');
+        const totalWidth = (n_lines - 1) * spacing;
+        wrapper.style.width = totalWidth + "px";
+        container.innerHTML = ''; 
+        amidaData = [];
+
+        // 描画
+        for (let i = 0; i < n_lines; i++) {
+            const vLine = document.createElement('div');
+            vLine.className = 'v-line';
+            vLine.style.left = (i * spacing) + "px";
+            vLine.innerHTML = `<div class="label name-tag">${memberNames[i]}</div>
+                               <div class="label prize-tag">${memberPrizes[i]}</div>`;
+            container.appendChild(vLine);
+        }
+
+        for (let d = 0; d < depth; d++) {
+            amidaData[d] = [];
+            for (let i = 0; i < n_lines - 1; i++) {
+                if (i > 0 && amidaData[d][i-1] === 1) amidaData[d][i] = 0;
+                else if (Math.random() < 0.4) {
+                    amidaData[d][i] = 1;
+                    const hLine = document.createElement('div');
+                    hLine.className = 'h-line';
+                    hLine.style.top = (d + 1) * stepHeight + "px";
+                    hLine.style.left = (i * spacing) + "px";
+                    container.appendChild(hLine);
+                } else amidaData[d][i] = 0;
+            }
+        }
+    }
+
+    async function startNextPlayer() {
+        if (isRunning || currentPlayerIndex >= memberNames.length) return;
+        isRunning = true;
+        document.getElementById('next-btn').disabled = true;
+
+        const container = document.getElementById('amida-content');
+        const player = document.createElement('div');
+        player.className = 'player';
+        container.appendChild(player);
+
+        const goalIndex = await runSinglePlayer(player, currentPlayerIndex);
+        
+        // 結果を追加（元々の順番に対応した名前と、たどり着いた景品を紐付け）
+        const tbody = document.getElementById('result-body');
+        const row = tbody.insertRow();
+        row.innerHTML = `<td>${memberNames[currentPlayerIndex]}</td><td><strong>${memberPrizes[goalIndex]}</strong></td>`;
+
+        currentPlayerIndex++;
+        isRunning = false;
+        if (currentPlayerIndex < memberNames.length) {
+            document.getElementById('next-btn').disabled = false;
+            document.getElementById('status-display').innerText = `次は ${memberNames[currentPlayerIndex]} さんの番です`;
+        } else {
+            document.getElementById('status-display').innerText = "全員終了しました！";
+        }
+    }
+
+    async function runSinglePlayer(playerElement, startIdx) {
+        let currentLine = startIdx;
+        await setPos(playerElement, currentLine, 0);
+        for (let d = 0; d < depth; d++) {
+            await setPos(playerElement, currentLine, (d + 1) * stepHeight);
+            if (currentLine > 0 && amidaData[d][currentLine - 1] === 1) {
+                currentLine--; await setPos(playerElement, currentLine, (d + 1) * stepHeight);
+            } else if (currentLine < memberNames.length - 1 && amidaData[d][currentLine] === 1) {
+                currentLine++; await setPos(playerElement, currentLine, (d + 1) * stepHeight);
+            }
+        }
+        await setPos(playerElement, currentLine, 400);
+        playerElement.style.background = "#bdc3c7";
+        return currentLine;
+    }
+
+    function setPos(el, lineIdx, topPx) {
+        return new Promise(resolve => {
+            el.style.left = (lineIdx * spacing) + "px";
+            el.style.top = topPx + "px";
+            setTimeout(resolve, 150);
+        });
+    }
+</script>
+</body>
+</html>
