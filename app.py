@@ -20,9 +20,6 @@ def index():
                 else:
                     row.append(1 if random.random() < 0.3 else 0)
             amida_grid.append(row)
-
-        return render_template('result.html', names=names, prizes=prizes, 
-                               amida_grid=amida_grid, n_lines=n_lines, depth=depth)
     
     return render_template('index.html')
 
