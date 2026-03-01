@@ -6,18 +6,15 @@ app = Flask(__name__)
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        # 入力された名前と景品を取得
         names = request.form.getlist('names')
         prizes = request.form.getlist('prizes')
         n_lines = len(names)
-        depth = 15  # あみだの縦の長さ
+        depth = 15
 
-        # 横線をランダムに生成
         amida_grid = []
         for d in range(depth):
             row = []
             for i in range(n_lines - 1):
-                # 横線が連続しないように調整（30%の確率で線を引く）
                 if i > 0 and row[i-1] == 1:
                     row.append(0)
                 else:
