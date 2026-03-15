@@ -7,12 +7,11 @@ app = Flask(__name__)
 def index():
     if request.method == 'POST':
         names = request.form.getlist('names')
-        prizes = request.form.getlist('prizes')
         n_lines = len(names)
         depth = 15
 
         amida_grid = []
-        for d in range(depth):
+        for _ in range(depth):
             row = []
             for i in range(n_lines - 1):
                 if i > 0 and row[i-1] == 1:
